@@ -9,7 +9,7 @@
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 120px; background-color: #f8f9fa; z-index: 10; border-top: 4px solid rgba(0,0,0,0.05); }
 
-        #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 15px; font-weight: bold; z-index: 100; pointer-events: none; text-shadow: 0 0 5px white; }
+        #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 14px; font-weight: bold; z-index: 100; pointer-events: none; text-shadow: 0 0 5px white; }
 
         #player {
             width: 50px; height: 50px; 
@@ -19,18 +19,12 @@
             transform-origin: bottom center;
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
-            /* [關鍵優化] 讓縮放變形自動補間，解決卡頓感 */
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             will-change: transform, left, bottom;
         }
-        
-        /* 眼睛也要滑順 */
-        #eyes { 
-            position: absolute; top: 12px; width: 10px; height: 10px; background: white; 
-            border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; 
-        }
+        #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
-        /* 超級跳特效 */
+        /* 特效 */
         .jump-wave {
             position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px;
             border: 4px solid white; border-radius: 50%; pointer-events: none; 
@@ -44,19 +38,25 @@
             100% { transform: translateX(-50%) scale(4); opacity: 0; border-width: 1px; }
         }
 
-        /* 虛擬按鈕 */
-        .controller { position: absolute; bottom: 15px; width: 100%; z-index: 100; display: none; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none; }
-        .btn { width: 65px; height: 65px; background: white; border: 2px solid #ddd; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: #5d6d7e; font-size: 20px; pointer-events: auto; box-shadow: 0 4px 0 #ccc; }
-        .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #ccc; background: #eee; }
-        .left-controls { display: flex; gap: 8px; align-items: center; }
-        .jump-btn { width: 85px; height: 85px; border-radius: 50%; font-size: 24px; background: #fffcf0; }
-
-        /* 落地動畫 */
-        @keyframes landSqueeze { 
-            0% { transform: translateX(-50%) scaleX(1.4) scaleY(0.6); } 
-            50% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); } 
-            100% { transform: translateX(-50%) scaleX(1) scaleY(1); } 
+        /* --- [優化] 手機按鍵佈局 --- */
+        .controller { position: absolute; bottom: 15px; width: 100%; z-index: 100; display: none; justify-content: space-between; padding: 0 25px; box-sizing: border-box; pointer-events: none; }
+        .btn { 
+            background: rgba(255, 255, 255, 0.9); border: 2px solid #ddd; border-radius: 18px; 
+            display: flex; align-items: center; justify-content: center; color: #5d6d7e; 
+            pointer-events: auto; box-shadow: 0 4px 0 #ccc; transition: transform 0.05s;
         }
+        .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #ccc; background: #eee; }
+        
+        /* 左側：純移動 */
+        .left-controls { display: flex; gap: 15px; align-items: center; }
+        .move-btn { width: 70px; height: 70px; font-size: 24px; }
+
+        /* 右側：跳躍與蹲下組合 */
+        .right-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .jump-btn { width: 85px; height: 85px; border-radius: 50%; font-size: 24px; background: #fffcf0; }
+        .down-btn { width: 65px; height: 50px; font-size: 20px; border-radius: 12px; }
+
+        @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.4) scaleY(0.6); } 50% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
         .land-effect { animation: landSqueeze 0.35s ease-out forwards !important; transition: none !important; }
     </style>
 </head>
@@ -68,11 +68,13 @@
         <div id="ground"></div>
         <div class="controller" id="mobile-ctrl">
             <div class="left-controls">
-                <div class="btn" id="btn-left">←</div>
-                <div class="btn" id="btn-down">↓</div>
-                <div class="btn" id="btn-right">→</div>
+                <div class="btn move-btn" id="btn-left">←</div>
+                <div class="btn move-btn" id="btn-right">→</div>
             </div>
-            <div class="btn jump-btn" id="btn-jump">跳</div>
+            <div class="right-controls">
+                <div class="btn jump-btn" id="btn-jump">跳</div>
+                <div class="btn down-btn" id="btn-down">↓</div>
+            </div>
         </div>
     </div>
 
@@ -103,10 +105,10 @@
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isTouch) {
             mobileCtrl.style.display = 'flex';
-            uiHint.innerHTML = "手機模式：← → 移動 / ↓ 急降與蓄力 / 跳躍鍵";
+            uiHint.innerHTML = "手機模式：左手移動 / 右手跳躍與急降";
         } else {
             mobileCtrl.style.display = 'none';
-            uiHint.innerHTML = "電腦模式：A / D 移動，S 急降與蓄力，空白鍵跳躍";
+            uiHint.innerHTML = "電腦模式：A/D 移動，S 急降蓄力，空白鍵跳躍";
         }
 
         const accel = isTouch ? 0.7 : 1.2; 
@@ -143,14 +145,12 @@
             player.style.left = playerX + 'px';
             player.style.bottom = playerY + 'px';
             
-            // 只有在非落地動畫時，才手動控制 CSS Transform
             if (!isLanding) {
                 let sY = 1, sX = 1;
                 if (isCrouching) {
-                    sY = 0.55; sX = 1.45; // 稍微更扁一點增加張力
+                    sY = 0.55; sX = 1.45;
                     eyes.style.top = '24px';
                 } else if (isJumping) {
-                    // 跳躍時的拉伸感減輕，讓動畫更穩
                     sY = 1 + Math.abs(yVelocity) / 50;
                     sX = 1 / sY;
                     eyes.style.top = '10px';
@@ -188,7 +188,6 @@
             if (isCrouching) return;
             isLanding = true;
             player.classList.add('land-effect');
-            // 動畫播完後才允許回到 JS 控制縮放
             setTimeout(() => {
                 isLanding = false;
                 player.classList.remove('land-effect');
@@ -199,6 +198,7 @@
 
         const bindBtn = (id, actionStart, actionEnd) => {
             const btn = document.getElementById(id);
+            if(!btn) return;
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); actionStart(); });
             btn.addEventListener('touchend', (e) => { e.preventDefault(); actionEnd(); });
         };
