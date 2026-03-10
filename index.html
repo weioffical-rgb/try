@@ -5,16 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>果凍小人</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; }
-        #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); cursor: pointer; }
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
+        #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 50px; background-color: #f8f9fa; z-index: 10; }
 
-        #ui-hint { 
-            position: absolute; top: 20px; width: 100%; text-align: center; 
-            color: #5d6d7e; font-size: 16px; font-weight: bold; z-index: 100;
-            pointer-events: none; text-shadow: 0 0 5px white;
-        }
-
+        /* 角色主體 */
         #player {
             width: 50px; height: 50px; 
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
@@ -25,45 +20,52 @@
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
             will-change: transform, left, bottom;
         }
-
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease; }
 
-        #player-shadow {
-            position: absolute; bottom: 45px; left: 50%; width: 50px; height: 8px;
-            background: rgba(0,0,0,0.1); border-radius: 50%; transform: translateX(-50%);
-            filter: blur(3px); z-index: 5;
+        /* 虛擬按鍵樣式 */
+        .controller {
+            position: absolute; bottom: 40px; width: 100%; height: 120px;
+            z-index: 100; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box;
+            pointer-events: none; /* 容器穿透 */
         }
+        .btn {
+            width: 80px; height: 80px; background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 24px; font-weight: bold;
+            pointer-events: auto; /* 按鈕接收觸摸 */
+            backdrop-filter: blur(5px);
+        }
+        .btn:active { background: rgba(255, 255, 255, 0.6); transform: scale(0.9); }
+        .left-controls { display: flex; gap: 15px; }
+        
+        /* 隱藏 PC 端按鈕 (選配) */
+        @media (min-width: 1024px) { .controller { opacity: 0.3; } }
 
-        @keyframes jumpWave {
-            0% { transform: translateX(-50%) scale(0.2); opacity: 0.8; }
-            100% { transform: translateX(-50%) scale(2.5); opacity: 0; }
-        }
-        .jump-wave {
-            position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px;
-            border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%;
-            pointer-events: none; animation: jumpWave 0.4s ease-out forwards;
-        }
-
-        @keyframes landSqueeze {
-            0% { transform: translateX(-50%) scaleX(1.6) scaleY(0.4); }
-            40% { transform: translateX(-50%) scaleX(0.8) scaleY(1.2); }
-            100% { transform: translateX(-50%) scaleX(1) scaleY(1); }
-        }
+        /* 特效與動畫維持原樣... */
+        .jump-wave { position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px; border: 3px solid rgba(255,255,255,0.8); border-radius: 50%; pointer-events: none; animation: jumpWave 0.4s ease-out forwards; }
+        @keyframes jumpWave { 0% { transform: translateX(-50%) scale(0.2); opacity: 0.8; } 100% { transform: translateX(-50%) scale(2.5); opacity: 0; } }
+        @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.6) scaleY(0.4); } 40% { transform: translateX(-50%) scaleX(0.8) scaleY(1.2); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
         .land-effect { animation: landSqueeze 0.4s ease-out forwards !important; }
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <div id="ui-hint">輕點跳躍 / 長按移動<br>AD 鍵或點擊螢幕左右</div>
         <div id="player"><div id="eyes"></div></div>
-        <div id="player-shadow"></div>
         <div id="ground"></div>
+
+        <div class="controller">
+            <div class="left-controls">
+                <div class="btn" id="btn-left">←</div>
+                <div class="btn" id="btn-right">→</div>
+            </div>
+            <div class="btn" id="btn-jump">跳</div>
+        </div>
     </div>
 
     <script>
         const player = document.getElementById('player');
-        const shadow = document.getElementById('player-shadow');
         const eyes = document.getElementById('eyes');
 
         let screenW = window.innerWidth;
@@ -78,18 +80,8 @@
         const GRAVITY = 0.75;
         const JUMP_POWER = 16;
         const FRICTION = 0.88; 
-
-        let accel = screenW < 600 ? 1.2 : screenW * 0.001;
-        let maxSpeed = screenW < 600 ? 6 : screenW * 0.015;
-
-        window.addEventListener('resize', () => {
-            screenW = window.innerWidth;
-            accel = screenW < 600 ? 1.2 : screenW * 0.001;
-            maxSpeed = screenW < 600 ? 6 : screenW * 0.015;
-        });
-
-        let moveState = { left: false, right: false };
-        let facingRight = true;
+        const accel = 1.2;
+        const maxSpeed = 7;
 
         function update() {
             if (moveState.left) { moveVelocity -= accel; facingRight = false; }
@@ -99,7 +91,7 @@
             if (Math.abs(moveVelocity) > maxSpeed) moveVelocity = maxSpeed * Math.sign(moveVelocity);
             
             playerX += moveVelocity;
-            playerX = Math.max(25, Math.min(screenW - 25, playerX));
+            playerX = Math.max(25, Math.min(window.innerWidth - 25, playerX));
 
             if (isJumping || playerY > 50) {
                 yVelocity -= GRAVITY;
@@ -117,10 +109,6 @@
         function draw() {
             player.style.left = playerX + 'px';
             player.style.bottom = playerY + 'px';
-            const h = Math.min(1, (playerY - 50) / 400);
-            shadow.style.left = playerX + 'px';
-            shadow.style.opacity = 0.3 * (1 - h);
-
             if (!isLanding) {
                 let sY = 1;
                 if (isJumping) sY = 1 + Math.abs(yVelocity) / 45;
@@ -135,7 +123,6 @@
                 if (jumpCount === 1) {
                     const wave = document.createElement('div');
                     wave.className = 'jump-wave';
-                    wave.style.left = '50%';
                     player.appendChild(wave);
                     setTimeout(() => wave.remove(), 400);
                 }
@@ -149,33 +136,24 @@
             setTimeout(() => { isLanding = false; player.classList.remove('land-effect'); }, 400);
         }
 
-        // --- 手機優化控制 ---
-        let holdTimer = null;
+        // --- 改進版控制邏輯 ---
+        let moveState = { left: false, right: false };
+        let facingRight = true;
 
-        window.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const tx = e.touches[0].clientX;
-            handleJump(); // 點擊瞬間先跳躍
+        const bindBtn = (id, actionStart, actionEnd) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); actionStart(); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); actionEnd(); });
+            // 同時支援滑鼠點擊以便測試
+            btn.addEventListener('mousedown', (e) => { if(e.button===0) actionStart(); });
+            btn.addEventListener('mouseup', (e) => actionEnd());
+        };
 
-            // 如果按住超過 150 毫秒，才判定為移動
-            holdTimer = setTimeout(() => {
-                if (tx < window.innerWidth / 2) {
-                    moveState.left = true;
-                } else {
-                    moveState.right = true;
-                }
-            }, 150); 
-        }, { passive: false });
+        bindBtn('btn-left', () => moveState.left = true, () => moveState.left = false);
+        bindBtn('btn-right', () => moveState.right = true, () => moveState.right = false);
+        bindBtn('btn-jump', () => handleJump(), () => {});
 
-        window.addEventListener('touchend', (e) => {
-            clearTimeout(holdTimer);
-            if (e.touches.length === 0) {
-                moveState.left = false;
-                moveState.right = false;
-            }
-        });
-
-        // 電腦控制
+        // 電腦鍵盤維持
         window.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'a') moveState.left = true;
             if (e.key.toLowerCase() === 'd') moveState.right = true;
@@ -185,10 +163,8 @@
             if (e.key.toLowerCase() === 'a') moveState.left = false;
             if (e.key.toLowerCase() === 'd') moveState.right = false;
         });
-        window.addEventListener('mousedown', (e) => { if (e.button === 0) handleJump(); });
 
         update();
     </script>
 </body>
 </html>
-
