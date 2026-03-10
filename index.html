@@ -9,69 +9,45 @@
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 50px; background-color: #f8f9fa; z-index: 10; }
 
-        /* 角色主體 - 負責位置與所有縮放動畫 */
+        /* 角色大小也改用螢幕寬度比例 (例如寬度的 12%)，並設定最大/最小像素防止變形 */
         #player {
-            width: 50px; height: 50px; 
+            width: 12vw; 
+            height: 12vw; 
+            max-width: 60px; max-height: 60px;
+            min-width: 40px; min-height: 40px;
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
             position: absolute; bottom: 50px; left: 50%;
-            transform: translateX(-50%); /* 永遠保持水平置中 */
+            transform: translateX(-50%);
             transform-origin: bottom center;
-            border-radius: 14px;
+            border-radius: 20%;
             z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4), inset 0 -4px 6px rgba(0,0,0,0.1);
         }
 
-        /* 腮紅 */
-        #player::before {
-            content: ""; position: absolute; bottom: 12px; width: 100%; height: 10px;
-            background: radial-gradient(circle, rgba(255, 121, 121, 0.4) 0%, rgba(255, 121, 121, 0) 70%);
-            opacity: 0; transition: opacity 0.3s;
-        }
-        #player.run-effect::before { opacity: 1; }
-
-        /* 眼睛 - 透過控制 left/right 來轉向，不翻轉身體 */
         #eyes { 
-            position: absolute; top: 12px; 
-            width: 10px; height: 10px; background: white; 
-            border-radius: 50%; 
-            transition: left 0.2s ease, top 0.1s ease; /* 讓眼睛移動平滑 */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: absolute; top: 25%; 
+            width: 20%; height: 20%; background: white; 
+            border-radius: 50%; transition: left 0.2s ease;
         }
 
         #player-shadow {
-            position: absolute; bottom: 45px; left: 50%; width: 50px; height: 8px;
+            position: absolute; bottom: 45px; left: 50%; width: 10vw; max-width: 50px; height: 8px;
             background: rgba(0,0,0,0.1); border-radius: 50%; transform: translateX(-50%);
             filter: blur(3px); z-index: 5;
         }
 
-        @keyframes jumpWave {
-            0% { transform: translateX(-50%) scale(0.2); opacity: 1; }
-            100% { transform: translateX(-50%) scale(2.5); opacity: 0; }
-        }
-        .jump-wave {
-            position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px;
-            border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%;
-            pointer-events: none; animation: jumpWave 0.4s ease-out forwards;
-        }
-
-        /* 落地動畫 - 確保包含 translateX(-50%) 以免閃現 */
         @keyframes extremeGoop {
             0% { transform: translateX(-50%) scaleX(1.7) scaleY(0.3); }
             25% { transform: translateX(-50%) scaleX(0.7) scaleY(1.4); }
             50% { transform: translateX(-50%) scaleX(1.2) scaleY(0.8); }
-            75% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); }
             100% { transform: translateX(-50%) scaleX(1) scaleY(1); }
         }
-        
         .land-effect { animation: extremeGoop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important; }
-
-        #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 14px; pointer-events: none; }
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <div id="ui-hint">AD鍵 / 點擊移動<br>空白鍵 / 跳躍</div>
         <div id="player"><div id="eyes"></div></div>
         <div id="player-shadow"></div>
         <div id="ground"></div>
@@ -82,28 +58,55 @@
         const shadow = document.getElementById('player-shadow');
         const eyes = document.getElementById('eyes');
 
-        let playerX = window.innerWidth / 2;
+        // --- 核心改動：依照螢幕比例計算數值 ---
+        let screenW = window.innerWidth;
+        let playerX = screenW / 2;
         let playerY = 50;
         let yVelocity = 0;
+        let moveVelocity = 0;
         let isJumping = false;
         let jumpCount = 0;
 
-        const gravity = 0.8;
-        const jumpPower = 17;
-        const speed = 7;
-        const maxJumps = 2;
+        // 將物理數值定義為「螢幕寬度的百分比」
+        // 這樣無論螢幕多大，小人橫越螢幕的時間都會一樣
+        const getBaseValues = () => ({
+            gravity: screenW * 0.0008,     // 重力
+            jumpPower: screenW * 0.018,    // 跳躍力
+            accel: screenW * 0.001,        // 加速度
+            friction: 0.85,                // 摩擦力
+            maxSpeed: screenW * 0.015      // 最高速度 (螢幕寬度的 1.5%)
+        });
+
+        let physics = getBaseValues();
+
+        // 監聽螢幕大小縮放，重新計算比例
+        window.addEventListener('resize', () => {
+            screenW = window.innerWidth;
+            physics = getBaseValues();
+        });
 
         let moveState = { left: false, right: false };
         let facingRight = true;
 
         function update() {
-            if (moveState.left) { playerX -= speed; facingRight = false; }
-            if (moveState.right) { playerX += speed; facingRight = true; }
+            // 水平移動邏輯 (使用比例數值)
+            if (moveState.left) { moveVelocity -= physics.accel; facingRight = false; }
+            if (moveState.right) { moveVelocity += physics.accel; facingRight = true; }
 
-            playerX = Math.max(25, Math.min(window.innerWidth - 25, playerX));
+            moveVelocity *= physics.friction;
+            if (Math.abs(moveVelocity) > physics.maxSpeed) {
+                moveVelocity = physics.maxSpeed * Math.sign(moveVelocity);
+            }
 
+            playerX += moveVelocity;
+
+            // 邊界檢查
+            const pWidth = player.offsetWidth / 2;
+            playerX = Math.max(pWidth, Math.min(screenW - pWidth, playerX));
+
+            // 跳躍物理 (使用比例數值)
             if (isJumping || playerY > 50) {
-                yVelocity -= gravity;
+                yVelocity -= physics.gravity;
                 playerY += yVelocity;
                 if (playerY <= 50) {
                     playerY = 50;
@@ -123,45 +126,28 @@
 
             const hFactor = Math.min(1, (playerY - 50) / 400);
             shadow.style.left = playerX + 'px';
-            shadow.style.width = (50 * (1 - hFactor)) + 'px';
             shadow.style.opacity = 0.3 * (1 - hFactor);
 
-            if (!isJumping && (moveState.left || moveState.right)) player.classList.add('run-effect');
-            else player.classList.remove('run-effect');
-
-            // 處理縮放 (只有在沒播放落地動畫時才由 JS 控制)
             if (!player.classList.contains('land-effect')) {
                 let scaleX = 1, scaleY = 1;
                 if (isJumping) {
-                    let stretch = 1 + Math.abs(yVelocity) / 45;
+                    let stretch = 1 + Math.abs(yVelocity) / (screenW * 0.05);
                     scaleY = stretch;
                     scaleX = 1 / stretch;
                 }
                 player.style.transform = `translateX(-50%) scaleX(${scaleX}) scaleY(${scaleY})`;
             }
 
-            // [關鍵修復] 轉向邏輯：直接改眼睛的 left 位置
-            if (facingRight) {
-                eyes.style.left = '32px'; // 靠右看
-            } else {
-                eyes.style.left = '8px';  // 靠左看
-            }
-            
-            // 眼睛高度隨速度變化
-            let eyeY = -yVelocity * 0.8; 
-            eyes.style.top = (12 + eyeY) + 'px';
+            // 眼睛位置也依照比例移動
+            eyes.style.left = facingRight ? '65%' : '15%';
+            let eyeY = -yVelocity * 0.5; 
+            eyes.style.top = (25 + eyeY) + '%';
         }
 
         function handleJump() {
             if (jumpCount < maxJumps) {
-                if (jumpCount === 1) {
-                    const wave = document.createElement('div');
-                    wave.classList.add('jump-wave');
-                    player.appendChild(wave);
-                    setTimeout(() => wave.remove(), 400);
-                }
                 isJumping = true;
-                yVelocity = jumpPower;
+                yVelocity = physics.jumpPower;
                 jumpCount++;
                 player.classList.remove('land-effect');
             }
@@ -172,6 +158,7 @@
             setTimeout(() => player.classList.remove('land-effect'), 500);
         }
 
+        // 事件監聽 (維持原本邏輯)
         window.addEventListener('keydown', (e) => {
             if (e.key === 'a' || e.key === 'A') moveState.left = true;
             if (e.key === 'd' || e.key === 'D') moveState.right = true;
@@ -185,10 +172,10 @@
             e.preventDefault();
             handleJump();
             const tx = e.touches[e.touches.length - 1].clientX;
-            if (tx < window.innerWidth / 2) { moveState.left = true; moveState.right = false; }
+            if (tx < screenW / 2) { moveState.left = true; moveState.right = false; }
             else { moveState.right = true; moveState.left = false; }
         }, { passive: false });
-        window.addEventListener('touchend', (e) => { if (e.touches.length === 0) { moveState.left = false; moveState.right = false; } });
+        window.addEventListener('touchend', () => { moveState.left = false; moveState.right = false; });
 
         update();
     </script>
