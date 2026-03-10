@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人 - 單手蓄力跳</title>
+    <title>果凍小人 - 精準單鍵修正版</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
@@ -17,7 +17,7 @@
             transform-origin: bottom center;
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
-            transition: transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
@@ -34,10 +34,8 @@
             color: #5d6d7e; font-weight: bold; pointer-events: auto;
             box-shadow: 0 5px 0 #bbb; border-radius: 20px;
         }
-        /* 移動按鈕 */
         #btn-left { bottom: 25px; left: 20px; width: 85px; height: 75px; font-size: 26px; }
         #btn-right { bottom: 25px; left: 115px; width: 85px; height: 75px; font-size: 26px; }
-        /* 核心動作鈕 */
         #btn-action { bottom: 20px; right: 20px; width: 140px; height: 90px; border-radius: 45px; font-size: 24px; background: #fffcf0; }
 
         .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
@@ -72,14 +70,14 @@
         let yVelocity = 0, moveVelocity = 0;
         let isJumping = false, jumpCount = 0, isCrouching = false, facingRight = true;
 
-        const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.0, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.45, FRICTION = 0.88; 
+        const GRAVITY = 0.75, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.5, FRICTION = 0.88; 
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "<b>單手蓄力跳教學</b><br>1. 拇指壓住 ACTION (蓄力中)<br>2. 拇指快速鬆開再壓下 (超級跳噴射！)";
+            uiHint.innerHTML = "<b>單鍵手感優化</b><br>1. 點一下 = 跳躍<br>2. 按住 0.2秒 = 蓄力<br>3. 蓄力放開後立刻點 = <b>超級跳！</b>";
         } else {
-            uiHint.innerHTML = "電腦版：AD移動 | S按住蓄力 | 空白鍵跳躍";
+            uiHint.innerHTML = "電腦版：AD移動 | S蓄力 | 空白鍵跳躍";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -94,8 +92,7 @@
             playerX = Math.max(25, Math.min(window.innerWidth - 25, playerX));
 
             if (isJumping || playerY > GROUND_Y) {
-                let currentGravity = isCrouching ? FAST_FALL_GRAVITY : GRAVITY;
-                yVelocity -= currentGravity;
+                yVelocity -= GRAVITY;
                 playerY += yVelocity;
                 if (playerY <= GROUND_Y) {
                     playerY = GROUND_Y; yVelocity = 0;
@@ -117,14 +114,19 @@
             eyes.style.left = facingRight ? '32px' : '8px';
         }
 
-        function handleJump() {
+        // --- 核心邏輯修正 ---
+        function handleJump(forceSuper = false) {
             if (jumpCount < 2) {
-                let pwr = JUMP_POWER, isSuper = false;
-                if (isCrouching && !isJumping) { pwr *= SUPER_JUMP_MULT; isSuper = true; }
+                let pwr = JUMP_POWER;
+                let isSuper = forceSuper;
+
+                if (isSuper) pwr *= SUPER_JUMP_MULT;
+
                 const wave = document.createElement('div');
                 wave.className = 'jump-wave' + (isSuper ? ' super-wave' : '');
                 player.appendChild(wave);
                 setTimeout(() => wave.remove(), 400);
+
                 isJumping = true; yVelocity = pwr; jumpCount++;
             }
         }
@@ -133,41 +135,50 @@
 
         if (isTouch) {
             const btnAction = document.getElementById('btn-action');
-            const btnLeft = document.getElementById('btn-left');
-            const btnRight = document.getElementById('btn-right');
+            let holdTimer = null;
+            let lastReleaseTime = 0; // 紀錄放開蓄力的時間
 
-            // --- 核心改動：精準處理 ACTION 鈕 ---
             btnAction.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                // 只要點下去，就觸發跳躍（或是蓄力跳）
-                handleJump();
-                // 同時進入蓄力狀態
-                isCrouching = true;
-                btnAction.style.transform = "translateY(3px)";
-                btnAction.style.boxShadow = "0 2px 0 #bbb";
+                const now = Date.now();
+
+                // 核心判定：如果剛放開蓄力不到 250ms 就點擊，視為蓄力跳
+                if (now - lastReleaseTime < 250) {
+                    handleJump(true); // 強制超級跳
+                    lastReleaseTime = 0; // 重置防止三連跳
+                } else {
+                    // 點擊瞬間不進入 Crouch，先啟動計時器
+                    holdTimer = setTimeout(() => {
+                        isCrouching = true;
+                    }, 180); // 超過 180ms 才變扁
+                }
             });
 
             btnAction.addEventListener('touchend', (e) => {
                 e.preventDefault();
-                isCrouching = false;
-                btnAction.style.transform = "translateY(0px)";
-                btnAction.style.boxShadow = "0 5px 0 #bbb";
-            });
+                clearTimeout(holdTimer);
 
-            // 移動按鈕
-            btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); moveState.left = true; });
-            btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); moveState.left = false; });
-            btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); moveState.right = true; });
-            btnRight.addEventListener('touchend', (e) => { e.preventDefault(); moveState.right = false; });
+                if (!isCrouching) {
+                    // 短按放開：如果是普通狀態，就跳躍
+                    handleJump(false);
+                } else {
+                    // 長按放開：記錄時間，允許接下來的點擊觸發超級跳
+                    isCrouching = false;
+                    lastReleaseTime = Date.now();
+                }
+            });
         }
 
-        // 電腦版維持
+        // 電腦版保持直覺
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             if (k === 'a') moveState.left = true;
             if (k === 'd') moveState.right = true;
             if (k === 's') isCrouching = true;
-            if (k === ' ' || k === 'w') { e.preventDefault(); handleJump(); }
+            if (k === ' ' || k === 'w') {
+                e.preventDefault();
+                handleJump(isCrouching && !isJumping);
+            }
         });
         window.addEventListener('keyup', (e) => {
             const k = e.key.toLowerCase();
@@ -175,6 +186,15 @@
             if (k === 'd') moveState.right = false;
             if (k === 's') isCrouching = false;
         });
+
+        const bind = (id, start, end) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); if(end) end(); });
+        };
+        bind('btn-left', () => moveState.left = true, () => moveState.left = false);
+        bind('btn-right', () => moveState.right = true, () => moveState.right = false);
 
         update();
     </script>
