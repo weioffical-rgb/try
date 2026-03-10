@@ -9,7 +9,6 @@
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 120px; background-color: #f8f9fa; z-index: 10; border-top: 4px solid rgba(0,0,0,0.05); }
 
-        /* 角色 */
         #player {
             width: 50px; height: 50px; 
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
@@ -19,14 +18,13 @@
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
             transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-            will-change: transform, left, bottom;
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
-        /* 手機按鈕 */
+        /* 按鈕佈局 */
         .mobile-ui { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 100; pointer-events: none; display: none; }
         .btn {
-            position: absolute; background: rgba(255, 255, 255, 0.85);
+            position: absolute; background: rgba(255, 255, 255, 0.9);
             border: 2px solid #ddd; display: flex; align-items: center; justify-content: center;
             color: #5d6d7e; font-weight: bold; pointer-events: auto;
             box-shadow: 0 5px 0 #bbb; border-radius: 20px;
@@ -36,9 +34,8 @@
         #btn-left { bottom: 25px; left: 20px; width: 85px; height: 75px; font-size: 26px; }
         #btn-right { bottom: 25px; left: 120px; width: 85px; height: 75px; font-size: 26px; }
         
-        /* 蓄力與跳躍：分開一點點但靠近，方便右手操作 */
-        #btn-jump { bottom: 70px; right: 25px; width: 110px; height: 55px; border-radius: 30px; font-size: 22px; background: #fffcf0; }
-        #btn-down { bottom: 10px; right: 25px; width: 110px; height: 50px; border-radius: 15px; font-size: 18px; }
+        /* [核心] 超大單一動作鍵 */
+        #btn-action { bottom: 20px; right: 20px; width: 140px; height: 90px; border-radius: 45px; font-size: 24px; background: #fffcf0; }
 
         #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 14px; z-index: 50; pointer-events: none; }
 
@@ -46,7 +43,6 @@
         .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
         .super-wave { border-color: #fff176; box-shadow: 0 0 25px #fff59d; border-width: 6px; }
         @keyframes jumpWaveInner { 0% { transform: translateX(-50%) scale(0.1); opacity: 1; } 100% { transform: translateX(-50%) scale(4); opacity: 0; } }
-        
         @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.4) scaleY(0.6); } 50% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
         .land-effect { animation: landSqueeze 0.35s ease-out forwards !important; transition: none !important; }
     </style>
@@ -61,8 +57,7 @@
         <div class="mobile-ui" id="mobile-ctrl">
             <div class="btn" id="btn-left">←</div>
             <div class="btn" id="btn-right">→</div>
-            <div class="btn" id="btn-jump">跳</div>
-            <div class="btn" id="btn-down">蓄力/下</div>
+            <div class="btn" id="btn-action">動作</div>
         </div>
     </div>
 
@@ -79,15 +74,14 @@
         let yVelocity = 0, moveVelocity = 0;
         let isJumping = false, jumpCount = 0, isLanding = false, isCrouching = false, facingRight = true;
 
-        const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.0, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.45; 
-        const FRICTION = 0.88; 
-
+        const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.0, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.45, FRICTION = 0.88; 
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "按住「下」蓄力，再點擊「跳」發動超級跳";
+            uiHint.innerHTML = "點擊跳躍 / 長按蓄力 / 蓄力時再點一下超級跳";
         } else {
-            uiHint.innerHTML = "電腦版：S 蓄力，空白鍵跳躍";
+            uiHint.innerHTML = "電腦版：A/D 移動，S 蓄力，空白鍵跳躍";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -134,7 +128,6 @@
                 let pwr = JUMP_POWER;
                 let isSuper = false;
 
-                // 核心邏輯：如果當前正在蓄力，觸發超級跳
                 if (isCrouching && !isJumping) {
                     pwr *= SUPER_JUMP_MULT;
                     isSuper = true;
@@ -147,7 +140,6 @@
 
                 isJumping = true; yVelocity = pwr; jumpCount++;
                 isLanding = false; 
-                // 注意：跳躍瞬間不強制取消 crouch，讓玩家決定何時放開
                 player.classList.remove('land-effect');
             }
         }
@@ -170,10 +162,27 @@
         if (isTouch) {
             bind('btn-left', () => moveState.left = true, () => moveState.left = false);
             bind('btn-right', () => moveState.right = true, () => moveState.right = false);
-            bind('btn-down', () => isCrouching = true, () => isCrouching = false);
-            bind('btn-jump', () => handleJump());
+            
+            // [單鍵動作邏輯]
+            const actionBtn = document.getElementById('btn-action');
+            actionBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                // 如果已經在按著了，這就是第二次點擊 = 超級跳
+                if (isCrouching) {
+                    handleJump();
+                } else {
+                    // 第一次點擊：立刻判定為跳躍，並啟動蓄力檢測
+                    handleJump();
+                    isCrouching = true; 
+                }
+            });
+            actionBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                isCrouching = false;
+            });
         }
 
+        // 電腦控制也同步這種「S+空白鍵」或「S兩次」的邏輯
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             if (k === 'a') moveState.left = true;
