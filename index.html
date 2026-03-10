@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人</title>
+    <title>果凍小人 - 精準單鍵版</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
@@ -21,7 +21,13 @@
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
-        /* 按鈕佈局 */
+        /* UI 說明強化 */
+        #ui-hint { 
+            position: absolute; top: 20px; width: 100%; text-align: center; 
+            color: #4a5568; font-size: 14px; font-weight: bold; z-index: 50; 
+            pointer-events: none; line-height: 1.6; background: rgba(255,255,255,0.4); padding: 10px 0;
+        }
+
         .mobile-ui { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 100; pointer-events: none; display: none; }
         .btn {
             position: absolute; background: rgba(255, 255, 255, 0.9);
@@ -33,11 +39,7 @@
 
         #btn-left { bottom: 25px; left: 20px; width: 85px; height: 75px; font-size: 26px; }
         #btn-right { bottom: 25px; left: 120px; width: 85px; height: 75px; font-size: 26px; }
-        
-        /* [核心] 超大單一動作鍵 */
         #btn-action { bottom: 20px; right: 20px; width: 140px; height: 90px; border-radius: 45px; font-size: 24px; background: #fffcf0; }
-
-        #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 14px; z-index: 50; pointer-events: none; }
 
         /* 特效 */
         .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
@@ -57,7 +59,7 @@
         <div class="mobile-ui" id="mobile-ctrl">
             <div class="btn" id="btn-left">←</div>
             <div class="btn" id="btn-right">→</div>
-            <div class="btn" id="btn-action">動作</div>
+            <div class="btn" id="btn-action">ACTION</div>
         </div>
     </div>
 
@@ -79,9 +81,9 @@
 
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "點擊跳躍 / 長按蓄力 / 蓄力時再點一下超級跳";
+            uiHint.innerHTML = "✨ <b>手機操作指南</b> ✨<br>【輕點一下】普通跳躍<br>【按住不放】蹲下蓄力 / 空中急降<br>【蓄力中點擊】發動強力超級跳";
         } else {
-            uiHint.innerHTML = "電腦版：A/D 移動，S 蓄力，空白鍵跳躍";
+            uiHint.innerHTML = "✨ <b>電腦操作指南</b> ✨<br>【A / D】移動 | 【S】按住蓄力 / 空中急降<br>【空白鍵】跳躍 | 【S + 空白鍵】超級跳";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -152,37 +154,43 @@
 
         let moveState = { left: false, right: false };
 
-        const bind = (id, start, end) => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
-            el.addEventListener('touchend', (e) => { e.preventDefault(); if(end) end(); });
-        };
-
+        // --- 核心修正：單鍵長短按判定 ---
         if (isTouch) {
-            bind('btn-left', () => moveState.left = true, () => moveState.left = false);
-            bind('btn-right', () => moveState.right = true, () => moveState.right = false);
-            
-            // [單鍵動作邏輯]
+            let touchTimer = null;
+            let hasJumpedOnThisTouch = false;
+
             const actionBtn = document.getElementById('btn-action');
+            
             actionBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                // 如果已經在按著了，這就是第二次點擊 = 超級跳
+                hasJumpedOnThisTouch = false;
+
+                // 如果已經在蓄力(長按中)，這次點擊就是超級跳
                 if (isCrouching) {
                     handleJump();
+                    hasJumpedOnThisTouch = true;
                 } else {
-                    // 第一次點擊：立刻判定為跳躍，並啟動蓄力檢測
-                    handleJump();
-                    isCrouching = true; 
+                    // 啟動長按檢測
+                    touchTimer = setTimeout(() => {
+                        isCrouching = true;
+                    }, 180); // 180ms 內放開算短按，超過算長按
                 }
             });
+
             actionBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
+                clearTimeout(touchTimer);
+
+                // 如果還沒跳過，且還沒進入蓄力狀態(代表是短按)
+                if (!hasJumpedOnThisTouch && !isCrouching) {
+                    handleJump();
+                }
+
                 isCrouching = false;
             });
         }
 
-        // 電腦控制也同步這種「S+空白鍵」或「S兩次」的邏輯
+        // 電腦控制
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             if (k === 'a') moveState.left = true;
@@ -196,6 +204,15 @@
             if (k === 'd') moveState.right = false;
             if (k === 's') isCrouching = false;
         });
+
+        const bind = (id, start, end) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); if(end) end(); });
+        };
+        bind('btn-left', () => moveState.left = true, () => moveState.left = false);
+        bind('btn-right', () => moveState.right = true, () => moveState.right = false);
 
         update();
     </script>
