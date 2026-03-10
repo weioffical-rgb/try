@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人</title>
+    <title>果凍小人 - 專業按鍵版</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 120px; background-color: #f8f9fa; z-index: 10; border-top: 4px solid rgba(0,0,0,0.05); }
 
-        /* [優化] 極簡 UI 提示 */
+        /* 極簡說明 */
         #ui-hint { 
             position: absolute; top: 25px; width: 100%; text-align: center; 
-            color: #5d6d7e; font-size: 13px; letter-spacing: 1px; z-index: 50; 
-            pointer-events: none; opacity: 0.8;
+            color: #5d6d7e; font-size: 13px; z-index: 50; pointer-events: none;
         }
         .hint-box { display: inline-block; background: rgba(255,255,255,0.5); padding: 5px 15px; border-radius: 20px; backdrop-filter: blur(5px); }
 
@@ -25,45 +24,51 @@
             transform-origin: bottom center;
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
-            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            transition: transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            will-change: transform, left, bottom;
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
-        /* [優化] 手機按鈕：改用噴砂半透明感 */
+        /* [回歸] 專業實體按鍵佈局 */
         .mobile-ui { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 100; pointer-events: none; display: none; }
         .btn {
             position: absolute; background: rgba(255, 255, 255, 0.4);
             backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.6); 
             display: flex; align-items: center; justify-content: center;
             color: #5d6d7e; font-weight: bold; pointer-events: auto;
-            border-radius: 22px; transition: background 0.2s, transform 0.1s;
+            border-radius: 20px; transition: all 0.1s;
         }
-        .btn:active { background: rgba(255, 255, 255, 0.8); transform: translateY(3px) scale(0.95); }
+        .btn:active { background: rgba(255, 255, 255, 0.8); transform: translateY(3px); }
 
+        /* 左側移動 */
         #btn-left { bottom: 25px; left: 20px; width: 75px; height: 70px; font-size: 24px; }
         #btn-right { bottom: 25px; left: 105px; width: 75px; height: 70px; font-size: 24px; }
-        #btn-action { 
-            bottom: 20px; right: 20px; width: 120px; height: 85px; 
-            border-radius: 35px; font-size: 18px; letter-spacing: 2px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        }
 
+        /* 右側操作：垂直分開，避免誤觸 */
+        #btn-jump { bottom: 70px; right: 25px; width: 110px; height: 55px; border-radius: 30px; font-size: 20px; background: rgba(255,252,240,0.5); }
+        #btn-down { bottom: 10px; right: 25px; width: 110px; height: 50px; border-radius: 15px; font-size: 18px; }
+
+        /* 特效 */
         .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
         .super-wave { border-color: #fff176; box-shadow: 0 0 25px #fff59d; border-width: 6px; }
         @keyframes jumpWaveInner { 0% { transform: translateX(-50%) scale(0.1); opacity: 1; } 100% { transform: translateX(-50%) scale(4); opacity: 0; } }
+        
+        @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.4) scaleY(0.6); } 50% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
+        .land-effect { animation: landSqueeze 0.35s ease-out forwards !important; transition: none !important; }
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <div id="ui-hint"><div class="hint-box" id="hint-text">加載中...</div></div>
+        <div id="ui-hint"><div class="hint-box" id="hint-text"></div></div>
         <div id="player"><div id="eyes"></div></div>
         <div id="ground"></div>
 
         <div class="mobile-ui" id="mobile-ctrl">
             <div class="btn" id="btn-left">←</div>
             <div class="btn" id="btn-right">→</div>
-            <div class="btn" id="btn-action">ACTION</div>
+            <div class="btn" id="btn-jump">跳</div>
+            <div class="btn" id="btn-down">↓</div>
         </div>
     </div>
 
@@ -78,17 +83,16 @@
         const GROUND_Y = 120; 
         let playerY = GROUND_Y; 
         let yVelocity = 0, moveVelocity = 0;
-        let isJumping = false, jumpCount = 0, isCrouching = false, facingRight = true;
+        let isJumping = false, jumpCount = 0, isLanding = false, isCrouching = false, facingRight = true;
 
-        const GRAVITY = 0.75, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.5, FRICTION = 0.88; 
+        const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.5, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.45, FRICTION = 0.88; 
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-        // [簡化] UI 說明
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "點擊跳躍 • 長按蓄力 • 蓄力後連點超級跳";
+            uiHint.innerHTML = "左手移動 • 右手跳躍與急降/蓄力";
         } else {
-            uiHint.innerHTML = "A / D 移動 • S 蓄力 • 空白鍵跳躍";
+            uiHint.innerHTML = "A / D 移動 • S 蓄力/急降 • 空白鍵跳躍";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -102,12 +106,19 @@
             playerX += moveVelocity;
             playerX = Math.max(25, Math.min(window.innerWidth - 25, playerX));
 
+            // 垂直物理
             if (isJumping || playerY > GROUND_Y) {
-                yVelocity -= GRAVITY;
+                // [核心修正] 只要按著「下」，急降重力立刻生效
+                let currentGravity = isCrouching ? FAST_FALL_GRAVITY : GRAVITY;
+                yVelocity -= currentGravity;
                 playerY += yVelocity;
+
                 if (playerY <= GROUND_Y) {
-                    playerY = GROUND_Y; yVelocity = 0;
-                    isJumping = false; jumpCount = 0;
+                    playerY = GROUND_Y;
+                    yVelocity = 0;
+                    if (isJumping && !isCrouching) triggerLandEffect();
+                    isJumping = false;
+                    jumpCount = 0;
                 }
             }
             draw();
@@ -117,58 +128,50 @@
         function draw() {
             player.style.left = playerX + 'px';
             player.style.bottom = playerY + 'px';
-            let sY = 1, sX = 1;
-            if (isCrouching) { sY = 0.55; sX = 1.45; eyes.style.top = '24px'; }
-            else if (isJumping) { sY = 1 + Math.abs(yVelocity) / 45; sX = 1 / sY; eyes.style.top = '10px'; }
-            else { eyes.style.top = '12px'; }
-            player.style.transform = `translateX(-50%) scaleX(${sX}) scaleY(${sY})`;
+            if (!isLanding) {
+                let sY = 1, sX = 1;
+                if (isCrouching) { sY = 0.55; sX = 1.45; eyes.style.top = '24px'; }
+                else if (isJumping) { sY = 1 + Math.abs(yVelocity) / 45; sX = 1 / sY; eyes.style.top = '10px'; }
+                else { eyes.style.top = '12px'; }
+                player.style.transform = `translateX(-50%) scaleX(${sX}) scaleY(${sY})`;
+            }
             eyes.style.left = facingRight ? '32px' : '8px';
         }
 
-        function handleJump(forceSuper = false) {
+        function handleJump() {
             if (jumpCount < 2) {
-                let pwr = JUMP_POWER;
-                let isSuper = forceSuper;
-                if (isSuper) pwr *= SUPER_JUMP_MULT;
+                let pwr = JUMP_POWER, isSuper = false;
+                if (isCrouching && !isJumping) { pwr *= SUPER_JUMP_MULT; isSuper = true; }
                 const wave = document.createElement('div');
                 wave.className = 'jump-wave' + (isSuper ? ' super-wave' : '');
                 player.appendChild(wave);
                 setTimeout(() => wave.remove(), 400);
                 isJumping = true; yVelocity = pwr; jumpCount++;
+                isLanding = false; player.classList.remove('land-effect');
             }
+        }
+
+        function triggerLandEffect() {
+            if (isCrouching) return;
+            isLanding = true;
+            player.classList.add('land-effect');
+            setTimeout(() => { isLanding = false; player.classList.remove('land-effect'); }, 350);
         }
 
         let moveState = { left: false, right: false };
 
+        const bind = (id, start, end) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); if(end) end(); });
+        };
+
         if (isTouch) {
-            const btnAction = document.getElementById('btn-action');
-            let holdTimer = null, lastReleaseTime = 0;
-
-            btnAction.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                const now = Date.now();
-                if (now - lastReleaseTime < 250) {
-                    handleJump(true);
-                    lastReleaseTime = 0;
-                } else {
-                    holdTimer = setTimeout(() => { isCrouching = true; }, 180);
-                }
-            });
-
-            btnAction.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                clearTimeout(holdTimer);
-                if (!isCrouching) { handleJump(false); } 
-                else { isCrouching = false; lastReleaseTime = Date.now(); }
-            });
-
-            const bind = (id, start, end) => {
-                const el = document.getElementById(id);
-                el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
-                el.addEventListener('touchend', (e) => { e.preventDefault(); end(); });
-            };
             bind('btn-left', () => moveState.left = true, () => moveState.left = false);
             bind('btn-right', () => moveState.right = true, () => moveState.right = false);
+            bind('btn-down', () => isCrouching = true, () => isCrouching = false);
+            bind('btn-jump', () => handleJump());
         }
 
         window.addEventListener('keydown', (e) => {
@@ -176,7 +179,7 @@
             if (k === 'a') moveState.left = true;
             if (k === 'd') moveState.right = true;
             if (k === 's') isCrouching = true;
-            if (k === ' ' || k === 'w') { e.preventDefault(); handleJump(isCrouching && !isJumping); }
+            if (k === ' ' || k === 'w') { e.preventDefault(); handleJump(); }
         });
         window.addEventListener('keyup', (e) => {
             const k = e.key.toLowerCase();
