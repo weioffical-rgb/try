@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人 - 物理修正版</title>
+    <title>果凍小人 - 平台高度適配版</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
@@ -32,9 +32,9 @@
         #btn-left { bottom: 25px; left: 20px; width: 75px; height: 70px; font-size: 24px; }
         #btn-right { bottom: 25px; left: 105px; width: 75px; height: 70px; font-size: 24px; }
         #btn-action { bottom: 20px; right: 20px; width: 130px; height: 90px; border-radius: 35px; font-size: 20px; letter-spacing: 1px; }
-        .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
+        .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 3px solid rgba(255,255,255,0.8); border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
         .super-wave { border-color: #fff176; box-shadow: 0 0 25px #fff59d; border-width: 6px; }
-        @keyframes jumpWaveInner { 0% { transform: translateX(-50%) scale(0.1); opacity: 1; } 100% { transform: translateX(-50%) scale(4); opacity: 0; } }
+        @keyframes jumpWaveInner { 0% { transform: translateX(-50%) scale(0.1); opacity: 1; } 100% { transform: translateX(-50%) scale(3.5); opacity: 0; } }
     </style>
 </head>
 <body>
@@ -63,14 +63,17 @@
         let isJumping = false, jumpCount = 0, isCrouching = false, facingRight = true;
         let lastReleaseTime = 0; 
 
-        const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.5, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.5, FRICTION = 0.88; 
+        const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.5, JUMP_POWER = 16, FRICTION = 0.88; 
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        // 核心修正：平台差異化倍率
+        const SUPER_JUMP_MULT = isTouch ? 1.3 : 1.5; 
 
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "點擊跳躍 • 按住蹲下/急降 • 放開後連點超級跳";
+            uiHint.innerHTML = "跳躍 • 蹲下/急降 • 蓄力跳(降高度優化)";
         } else {
-            uiHint.innerHTML = "A/D 移動 • S 蹲下/急降 • 放開 S 後連點空白鍵超級跳";
+            uiHint.innerHTML = "A/D 移動 • S 蹲下/急降 • 蓄力跳";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -116,17 +119,18 @@
             let isSuper = false;
             let now = Date.now();
 
-            // 嚴格超級跳判定：僅限第一跳且在緩衝期內
             if (jumpCount === 0 && now - lastReleaseTime < 250 && !isCrouching) {
                 pwr *= SUPER_JUMP_MULT;
                 isSuper = true;
-                lastReleaseTime = 0; // 消耗掉蓄力狀態，防止影響二段跳
+                lastReleaseTime = 0;
             }
 
-            const wave = document.createElement('div');
-            wave.className = 'jump-wave' + (isSuper ? ' super-wave' : '');
-            player.appendChild(wave);
-            setTimeout(() => wave.remove(), 400);
+            if (isSuper || jumpCount === 1) {
+                const wave = document.createElement('div');
+                wave.className = 'jump-wave' + (isSuper ? ' super-wave' : '');
+                player.appendChild(wave);
+                setTimeout(() => wave.remove(), 400);
+            }
 
             isJumping = true; 
             yVelocity = pwr; 
