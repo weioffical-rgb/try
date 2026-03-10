@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人 - 雙指蓄力跳</title>
+    <title>果凍小人 - 單手蓄力跳</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 120px; background-color: #f8f9fa; z-index: 10; border-top: 4px solid rgba(0,0,0,0.05); }
 
-        /* 角色 */
         #player {
             width: 50px; height: 50px; 
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
@@ -18,11 +17,10 @@
             transform-origin: bottom center;
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
-            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            transition: transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
-        /* UI 說明 */
         #ui-hint { 
             position: absolute; top: 20px; width: 100%; text-align: center; 
             color: #4a5568; font-size: 14px; font-weight: bold; z-index: 50; 
@@ -36,13 +34,12 @@
             color: #5d6d7e; font-weight: bold; pointer-events: auto;
             box-shadow: 0 5px 0 #bbb; border-radius: 20px;
         }
-        .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #bbb; background: #eee; }
-
+        /* 移動按鈕 */
         #btn-left { bottom: 25px; left: 20px; width: 85px; height: 75px; font-size: 26px; }
-        #btn-right { bottom: 25px; left: 120px; width: 85px; height: 75px; font-size: 26px; }
-        #btn-action { bottom: 20px; right: 20px; width: 150px; height: 95px; border-radius: 40px; font-size: 22px; background: #fffcf0; }
+        #btn-right { bottom: 25px; left: 115px; width: 85px; height: 75px; font-size: 26px; }
+        /* 核心動作鈕 */
+        #btn-action { bottom: 20px; right: 20px; width: 140px; height: 90px; border-radius: 45px; font-size: 24px; background: #fffcf0; }
 
-        /* 特效 */
         .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
         .super-wave { border-color: #fff176; box-shadow: 0 0 25px #fff59d; border-width: 6px; }
         @keyframes jumpWaveInner { 0% { transform: translateX(-50%) scale(0.1); opacity: 1; } 100% { transform: translateX(-50%) scale(4); opacity: 0; } }
@@ -80,9 +77,9 @@
 
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "<b>🔥 終極蓄力跳教學 🔥</b><br>1. 按住 ACTION (變扁蓄力)<br>2. <b>不放開 ACTION</b>，用另一指點螢幕任何地方<br>3. 噴射超級跳！";
+            uiHint.innerHTML = "<b>單手蓄力跳教學</b><br>1. 拇指壓住 ACTION (蓄力中)<br>2. 拇指快速鬆開再壓下 (超級跳噴射！)";
         } else {
-            uiHint.innerHTML = "<b>💻 電腦版指南</b><br>A/D移動 | S按住蓄力<br>S不放開 + 空白鍵 = 超級跳";
+            uiHint.innerHTML = "電腦版：AD移動 | S按住蓄力 | 空白鍵跳躍";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -135,46 +132,36 @@
         let moveState = { left: false, right: false };
 
         if (isTouch) {
-            let actionTouchId = null;
+            const btnAction = document.getElementById('btn-action');
+            const btnLeft = document.getElementById('btn-left');
+            const btnRight = document.getElementById('btn-right');
 
-            // 全螢幕偵測，方便雙手配合
-            window.addEventListener('touchstart', (e) => {
+            // --- 核心改動：精準處理 ACTION 鈕 ---
+            btnAction.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                for (let touch of e.changedTouches) {
-                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                    
-                    if (el && el.id === 'btn-action') {
-                        // 按住按鈕：觸發蓄力，記錄 Touch ID
-                        isCrouching = true;
-                        actionTouchId = touch.identifier;
-                    } else if (el && (el.id === 'btn-left' || el.id === 'btn-right')) {
-                        // 移動按鍵
-                        if (el.id === 'btn-left') moveState.left = true;
-                        else moveState.right = true;
-                    } else {
-                        // 點擊螢幕其他任何地方：觸發跳躍
-                        // 如果此時 isCrouching 是 true，自然就是超級跳！
-                        handleJump();
-                    }
-                }
-            }, { passive: false });
-
-            window.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                for (let touch of e.changedTouches) {
-                    if (touch.identifier === actionTouchId) {
-                        isCrouching = false;
-                        actionTouchId = null;
-                    }
-                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                    // 這裡簡單處理：只要有手指離開，檢查是否還在按著移動
-                    moveState.left = false;
-                    moveState.right = false;
-                }
+                // 只要點下去，就觸發跳躍（或是蓄力跳）
+                handleJump();
+                // 同時進入蓄力狀態
+                isCrouching = true;
+                btnAction.style.transform = "translateY(3px)";
+                btnAction.style.boxShadow = "0 2px 0 #bbb";
             });
+
+            btnAction.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                isCrouching = false;
+                btnAction.style.transform = "translateY(0px)";
+                btnAction.style.boxShadow = "0 5px 0 #bbb";
+            });
+
+            // 移動按鈕
+            btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); moveState.left = true; });
+            btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); moveState.left = false; });
+            btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); moveState.right = true; });
+            btnRight.addEventListener('touchend', (e) => { e.preventDefault(); moveState.right = false; });
         }
 
-        // 電腦版
+        // 電腦版維持
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             if (k === 'a') moveState.left = true;
