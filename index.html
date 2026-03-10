@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>果凍小人</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; }
+        #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
+        #ground { position: absolute; bottom: 0; width: 100%; height: 50px; background-color: #f8f9fa; z-index: 10; }
+
+        /* 角色主體 - 負責位置與所有縮放動畫 */
+        #player {
+            width: 50px; height: 50px; 
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            position: absolute; bottom: 50px; left: 50%;
+            transform: translateX(-50%); /* 永遠保持水平置中 */
+            transform-origin: bottom center;
+            border-radius: 14px;
+            z-index: 15;
+            box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4), inset 0 -4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* 腮紅 */
+        #player::before {
+            content: ""; position: absolute; bottom: 12px; width: 100%; height: 10px;
+            background: radial-gradient(circle, rgba(255, 121, 121, 0.4) 0%, rgba(255, 121, 121, 0) 70%);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #player.run-effect::before { opacity: 1; }
+
+        /* 眼睛 - 透過控制 left/right 來轉向，不翻轉身體 */
+        #eyes { 
+            position: absolute; top: 12px; 
+            width: 10px; height: 10px; background: white; 
+            border-radius: 50%; 
+            transition: left 0.2s ease, top 0.1s ease; /* 讓眼睛移動平滑 */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        #player-shadow {
+            position: absolute; bottom: 45px; left: 50%; width: 50px; height: 8px;
+            background: rgba(0,0,0,0.1); border-radius: 50%; transform: translateX(-50%);
+            filter: blur(3px); z-index: 5;
+        }
+
+        @keyframes jumpWave {
+            0% { transform: translateX(-50%) scale(0.2); opacity: 1; }
+            100% { transform: translateX(-50%) scale(2.5); opacity: 0; }
+        }
+        .jump-wave {
+            position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px;
+            border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%;
+            pointer-events: none; animation: jumpWave 0.4s ease-out forwards;
+        }
+
+        /* 落地動畫 - 確保包含 translateX(-50%) 以免閃現 */
+        @keyframes extremeGoop {
+            0% { transform: translateX(-50%) scaleX(1.7) scaleY(0.3); }
+            25% { transform: translateX(-50%) scaleX(0.7) scaleY(1.4); }
+            50% { transform: translateX(-50%) scaleX(1.2) scaleY(0.8); }
+            75% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); }
+            100% { transform: translateX(-50%) scaleX(1) scaleY(1); }
+        }
+        
+        .land-effect { animation: extremeGoop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important; }
+
+        #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 14px; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui-hint">AD鍵 / 點擊移動<br>空白鍵 / 跳躍</div>
+        <div id="player"><div id="eyes"></div></div>
+        <div id="player-shadow"></div>
+        <div id="ground"></div>
+    </div>
+
+    <script>
+        const player = document.getElementById('player');
+        const shadow = document.getElementById('player-shadow');
+        const eyes = document.getElementById('eyes');
+
+        let playerX = window.innerWidth / 2;
+        let playerY = 50;
+        let yVelocity = 0;
+        let isJumping = false;
+        let jumpCount = 0;
+
+        const gravity = 0.8;
+        const jumpPower = 17;
+        const speed = 7;
+        const maxJumps = 2;
+
+        let moveState = { left: false, right: false };
+        let facingRight = true;
+
+        function update() {
+            if (moveState.left) { playerX -= speed; facingRight = false; }
+            if (moveState.right) { playerX += speed; facingRight = true; }
+
+            playerX = Math.max(25, Math.min(window.innerWidth - 25, playerX));
+
+            if (isJumping || playerY > 50) {
+                yVelocity -= gravity;
+                playerY += yVelocity;
+                if (playerY <= 50) {
+                    playerY = 50;
+                    if (isJumping) triggerLandEffect();
+                    yVelocity = 0;
+                    isJumping = false;
+                    jumpCount = 0;
+                }
+            }
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            player.style.left = playerX + 'px';
+            player.style.bottom = playerY + 'px';
+
+            const hFactor = Math.min(1, (playerY - 50) / 400);
+            shadow.style.left = playerX + 'px';
+            shadow.style.width = (50 * (1 - hFactor)) + 'px';
+            shadow.style.opacity = 0.3 * (1 - hFactor);
+
+            if (!isJumping && (moveState.left || moveState.right)) player.classList.add('run-effect');
+            else player.classList.remove('run-effect');
+
+            // 處理縮放 (只有在沒播放落地動畫時才由 JS 控制)
+            if (!player.classList.contains('land-effect')) {
+                let scaleX = 1, scaleY = 1;
+                if (isJumping) {
+                    let stretch = 1 + Math.abs(yVelocity) / 45;
+                    scaleY = stretch;
+                    scaleX = 1 / stretch;
+                }
+                player.style.transform = `translateX(-50%) scaleX(${scaleX}) scaleY(${scaleY})`;
+            }
+
+            // [關鍵修復] 轉向邏輯：直接改眼睛的 left 位置
+            if (facingRight) {
+                eyes.style.left = '32px'; // 靠右看
+            } else {
+                eyes.style.left = '8px';  // 靠左看
+            }
+            
+            // 眼睛高度隨速度變化
+            let eyeY = -yVelocity * 0.8; 
+            eyes.style.top = (12 + eyeY) + 'px';
+        }
+
+        function handleJump() {
+            if (jumpCount < maxJumps) {
+                if (jumpCount === 1) {
+                    const wave = document.createElement('div');
+                    wave.classList.add('jump-wave');
+                    player.appendChild(wave);
+                    setTimeout(() => wave.remove(), 400);
+                }
+                isJumping = true;
+                yVelocity = jumpPower;
+                jumpCount++;
+                player.classList.remove('land-effect');
+            }
+        }
+
+        function triggerLandEffect() {
+            player.classList.add('land-effect');
+            setTimeout(() => player.classList.remove('land-effect'), 500);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'A') moveState.left = true;
+            if (e.key === 'd' || e.key === 'D') moveState.right = true;
+            if (e.key === 'w' || e.key === 'W' || e.key === ' ') handleJump();
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'a' || e.key === 'A') moveState.left = false;
+            if (e.key === 'd' || e.key === 'D') moveState.right = false;
+        });
+        window.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleJump();
+            const tx = e.touches[e.touches.length - 1].clientX;
+            if (tx < window.innerWidth / 2) { moveState.left = true; moveState.right = false; }
+            else { moveState.right = true; moveState.left = false; }
+        }, { passive: false });
+        window.addEventListener('touchend', (e) => { if (e.touches.length === 0) { moveState.left = false; moveState.right = false; } });
+
+        update();
+    </script>
+</body>
+</html>
