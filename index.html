@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人 - 精準單鍵版</title>
+    <title>果凍小人 - 雙指蓄力跳</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
         #ground { position: absolute; bottom: 0; width: 100%; height: 120px; background-color: #f8f9fa; z-index: 10; border-top: 4px solid rgba(0,0,0,0.05); }
 
+        /* 角色 */
         #player {
             width: 50px; height: 50px; 
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
@@ -17,20 +18,20 @@
             transform-origin: bottom center;
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
-            transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; }
 
-        /* UI 說明強化 */
+        /* UI 說明 */
         #ui-hint { 
             position: absolute; top: 20px; width: 100%; text-align: center; 
             color: #4a5568; font-size: 14px; font-weight: bold; z-index: 50; 
-            pointer-events: none; line-height: 1.6; background: rgba(255,255,255,0.4); padding: 10px 0;
+            pointer-events: none; line-height: 1.6; background: rgba(255,255,255,0.6); padding: 10px 0;
         }
 
         .mobile-ui { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 100; pointer-events: none; display: none; }
         .btn {
-            position: absolute; background: rgba(255, 255, 255, 0.9);
+            position: absolute; background: rgba(255, 255, 255, 0.95);
             border: 2px solid #ddd; display: flex; align-items: center; justify-content: center;
             color: #5d6d7e; font-weight: bold; pointer-events: auto;
             box-shadow: 0 5px 0 #bbb; border-radius: 20px;
@@ -39,14 +40,12 @@
 
         #btn-left { bottom: 25px; left: 20px; width: 85px; height: 75px; font-size: 26px; }
         #btn-right { bottom: 25px; left: 120px; width: 85px; height: 75px; font-size: 26px; }
-        #btn-action { bottom: 20px; right: 20px; width: 140px; height: 90px; border-radius: 45px; font-size: 24px; background: #fffcf0; }
+        #btn-action { bottom: 20px; right: 20px; width: 150px; height: 95px; border-radius: 40px; font-size: 22px; background: #fffcf0; }
 
         /* 特效 */
         .jump-wave { position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px; border: 4px solid white; border-radius: 50%; pointer-events: none; animation: jumpWaveInner 0.4s forwards; z-index: -1; }
         .super-wave { border-color: #fff176; box-shadow: 0 0 25px #fff59d; border-width: 6px; }
         @keyframes jumpWaveInner { 0% { transform: translateX(-50%) scale(0.1); opacity: 1; } 100% { transform: translateX(-50%) scale(4); opacity: 0; } }
-        @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.4) scaleY(0.6); } 50% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
-        .land-effect { animation: landSqueeze 0.35s ease-out forwards !important; transition: none !important; }
     </style>
 </head>
 <body>
@@ -74,16 +73,16 @@
         const GROUND_Y = 120; 
         let playerY = GROUND_Y; 
         let yVelocity = 0, moveVelocity = 0;
-        let isJumping = false, jumpCount = 0, isLanding = false, isCrouching = false, facingRight = true;
+        let isJumping = false, jumpCount = 0, isCrouching = false, facingRight = true;
 
         const GRAVITY = 0.75, FAST_FALL_GRAVITY = 2.0, JUMP_POWER = 16, SUPER_JUMP_MULT = 1.45, FRICTION = 0.88; 
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
         if (isTouch) {
             mobileCtrl.style.display = 'block';
-            uiHint.innerHTML = "✨ <b>手機操作指南</b> ✨<br>【輕點一下】普通跳躍<br>【按住不放】蹲下蓄力 / 空中急降<br>【蓄力中點擊】發動強力超級跳";
+            uiHint.innerHTML = "<b>🔥 終極蓄力跳教學 🔥</b><br>1. 按住 ACTION (變扁蓄力)<br>2. <b>不放開 ACTION</b>，用另一指點螢幕任何地方<br>3. 噴射超級跳！";
         } else {
-            uiHint.innerHTML = "✨ <b>電腦操作指南</b> ✨<br>【A / D】移動 | 【S】按住蓄力 / 空中急降<br>【空白鍵】跳躍 | 【S + 空白鍵】超級跳";
+            uiHint.innerHTML = "<b>💻 電腦版指南</b><br>A/D移動 | S按住蓄力<br>S不放開 + 空白鍵 = 超級跳";
         }
 
         const accel = isTouch ? 0.7 : 1.2, maxSpeed = isTouch ? 5 : 8;
@@ -92,7 +91,6 @@
             let currentAccel = isCrouching ? accel * 0.6 : accel;
             if (moveState.left) { moveVelocity -= currentAccel; facingRight = false; }
             if (moveState.right) { moveVelocity += accel; facingRight = true; }
-            
             moveVelocity *= FRICTION;
             if (Math.abs(moveVelocity) > maxSpeed) moveVelocity = maxSpeed * Math.sign(moveVelocity);
             playerX += moveVelocity;
@@ -104,7 +102,6 @@
                 playerY += yVelocity;
                 if (playerY <= GROUND_Y) {
                     playerY = GROUND_Y; yVelocity = 0;
-                    if (isJumping && !isCrouching) triggerLandEffect();
                     isJumping = false; jumpCount = 0;
                 }
             }
@@ -115,82 +112,69 @@
         function draw() {
             player.style.left = playerX + 'px';
             player.style.bottom = playerY + 'px';
-            if (!isLanding) {
-                let sY = 1, sX = 1;
-                if (isCrouching) { sY = 0.55; sX = 1.45; eyes.style.top = '24px'; }
-                else if (isJumping) { sY = 1 + Math.abs(yVelocity) / 45; sX = 1 / sY; eyes.style.top = '10px'; }
-                else { eyes.style.top = '12px'; }
-                player.style.transform = `translateX(-50%) scaleX(${sX}) scaleY(${sY})`;
-            }
+            let sY = 1, sX = 1;
+            if (isCrouching) { sY = 0.55; sX = 1.45; eyes.style.top = '24px'; }
+            else if (isJumping) { sY = 1 + Math.abs(yVelocity) / 45; sX = 1 / sY; eyes.style.top = '10px'; }
+            else { eyes.style.top = '12px'; }
+            player.style.transform = `translateX(-50%) scaleX(${sX}) scaleY(${sY})`;
             eyes.style.left = facingRight ? '32px' : '8px';
         }
 
         function handleJump() {
             if (jumpCount < 2) {
-                let pwr = JUMP_POWER;
-                let isSuper = false;
-
-                if (isCrouching && !isJumping) {
-                    pwr *= SUPER_JUMP_MULT;
-                    isSuper = true;
-                }
-
+                let pwr = JUMP_POWER, isSuper = false;
+                if (isCrouching && !isJumping) { pwr *= SUPER_JUMP_MULT; isSuper = true; }
                 const wave = document.createElement('div');
                 wave.className = 'jump-wave' + (isSuper ? ' super-wave' : '');
                 player.appendChild(wave);
                 setTimeout(() => wave.remove(), 400);
-
                 isJumping = true; yVelocity = pwr; jumpCount++;
-                isLanding = false; 
-                player.classList.remove('land-effect');
             }
-        }
-
-        function triggerLandEffect() {
-            if (isCrouching) return;
-            isLanding = true; player.classList.add('land-effect');
-            setTimeout(() => { isLanding = false; player.classList.remove('land-effect'); }, 350);
         }
 
         let moveState = { left: false, right: false };
 
-        // --- 核心修正：單鍵長短按判定 ---
         if (isTouch) {
-            let touchTimer = null;
-            let hasJumpedOnThisTouch = false;
+            let actionTouchId = null;
 
-            const actionBtn = document.getElementById('btn-action');
-            
-            actionBtn.addEventListener('touchstart', (e) => {
+            // 全螢幕偵測，方便雙手配合
+            window.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                hasJumpedOnThisTouch = false;
-
-                // 如果已經在蓄力(長按中)，這次點擊就是超級跳
-                if (isCrouching) {
-                    handleJump();
-                    hasJumpedOnThisTouch = true;
-                } else {
-                    // 啟動長按檢測
-                    touchTimer = setTimeout(() => {
+                for (let touch of e.changedTouches) {
+                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                    
+                    if (el && el.id === 'btn-action') {
+                        // 按住按鈕：觸發蓄力，記錄 Touch ID
                         isCrouching = true;
-                    }, 180); // 180ms 內放開算短按，超過算長按
+                        actionTouchId = touch.identifier;
+                    } else if (el && (el.id === 'btn-left' || el.id === 'btn-right')) {
+                        // 移動按鍵
+                        if (el.id === 'btn-left') moveState.left = true;
+                        else moveState.right = true;
+                    } else {
+                        // 點擊螢幕其他任何地方：觸發跳躍
+                        // 如果此時 isCrouching 是 true，自然就是超級跳！
+                        handleJump();
+                    }
                 }
-            });
+            }, { passive: false });
 
-            actionBtn.addEventListener('touchend', (e) => {
+            window.addEventListener('touchend', (e) => {
                 e.preventDefault();
-                clearTimeout(touchTimer);
-
-                // 如果還沒跳過，且還沒進入蓄力狀態(代表是短按)
-                if (!hasJumpedOnThisTouch && !isCrouching) {
-                    handleJump();
+                for (let touch of e.changedTouches) {
+                    if (touch.identifier === actionTouchId) {
+                        isCrouching = false;
+                        actionTouchId = null;
+                    }
+                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                    // 這裡簡單處理：只要有手指離開，檢查是否還在按著移動
+                    moveState.left = false;
+                    moveState.right = false;
                 }
-
-                isCrouching = false;
             });
         }
 
-        // 電腦控制
+        // 電腦版
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             if (k === 'a') moveState.left = true;
@@ -204,15 +188,6 @@
             if (k === 'd') moveState.right = false;
             if (k === 's') isCrouching = false;
         });
-
-        const bind = (id, start, end) => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
-            el.addEventListener('touchend', (e) => { e.preventDefault(); if(end) end(); });
-        };
-        bind('btn-left', () => moveState.left = true, () => moveState.left = false);
-        bind('btn-right', () => moveState.right = true, () => moveState.right = false);
 
         update();
     </script>
