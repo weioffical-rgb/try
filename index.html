@@ -7,137 +7,132 @@
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
-        
-        /* 地板加高，將操作區與遊戲區分開 */
-        #ground { 
-            position: absolute; bottom: 0; width: 100%; height: 120px; 
-            background-color: #f8f9fa; z-index: 10; 
-            border-top: 4px solid rgba(0,0,0,0.05); 
-        }
+        #ground { position: absolute; bottom: 0; width: 100%; height: 120px; background-color: #f8f9fa; z-index: 10; border-top: 4px solid rgba(0,0,0,0.05); }
 
-        #ui-hint { 
-            position: absolute; top: 20px; width: 100%; text-align: center; 
-            color: #5d6d7e; font-size: 15px; font-weight: bold; z-index: 100;
-            pointer-events: none; text-shadow: 0 0 5px white;
-        }
+        #ui-hint { position: absolute; top: 20px; width: 100%; text-align: center; color: #5d6d7e; font-size: 15px; font-weight: bold; z-index: 100; pointer-events: none; text-shadow: 0 0 5px white; }
 
-        /* 角色主體 */
         #player {
             width: 50px; height: 50px; 
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
             position: absolute; bottom: 120px; left: 50%;
-            transform: translateX(-50%);
+            transform: translateX(-50%) scale(1);
             transform-origin: bottom center;
             border-radius: 14px; z-index: 15;
             box-shadow: 0 8px 15px rgba(255, 154, 158, 0.4);
+            /* [關鍵優化] 讓縮放變形自動補間，解決卡頓感 */
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             will-change: transform, left, bottom;
         }
-        #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease; }
-
-        /* 虛擬按鍵放在地板內 */
-        .controller {
-            position: absolute; bottom: 20px; width: 100%; 
-            z-index: 100; display: none; 
-            justify-content: space-between; padding: 0 25px; box-sizing: border-box;
-            pointer-events: none;
+        
+        /* 眼睛也要滑順 */
+        #eyes { 
+            position: absolute; top: 12px; width: 10px; height: 10px; background: white; 
+            border-radius: 50%; transition: left 0.15s ease, top 0.2s ease; 
         }
-        .btn {
-            width: 75px; height: 75px; 
-            background: white;
-            border: 2px solid #ddd; border-radius: 20px;
-            display: flex; align-items: center; justify-content: center;
-            color: #5d6d7e; font-size: 24px;
-            pointer-events: auto; box-shadow: 0 4px 0 #ccc;
-        }
-        .btn:active { transform: translateY(4px); box-shadow: none; background: #eee; }
-        .left-controls { display: flex; gap: 15px; }
 
-        /* 特效 */
-        .jump-wave { position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px; border: 3px solid rgba(255,255,255,0.6); border-radius: 50%; pointer-events: none; animation: jumpWave 0.4s ease-out forwards; }
-        @keyframes jumpWave { 0% { transform: translateX(-50%) scale(0.2); opacity: 0.8; } 100% { transform: translateX(-50%) scale(2.5); opacity: 0; } }
-        @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.6) scaleY(0.4); } 40% { transform: translateX(-50%) scaleX(0.8) scaleY(1.2); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
-        .land-effect { animation: landSqueeze 0.4s ease-out forwards !important; }
+        /* 超級跳特效 */
+        .jump-wave {
+            position: absolute; left: 50%; bottom: -15px; width: 40px; height: 15px;
+            border: 4px solid white; border-radius: 50%; pointer-events: none; 
+            animation: jumpWaveInner 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            z-index: -1; box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+        }
+        .super-wave { border-color: #fff176; box-shadow: 0 0 25px #fff59d, 0 0 10px white; border-width: 6px; }
+
+        @keyframes jumpWaveInner {
+            0% { transform: translateX(-50%) scale(0.1); opacity: 1; border-width: 8px; }
+            100% { transform: translateX(-50%) scale(4); opacity: 0; border-width: 1px; }
+        }
+
+        /* 虛擬按鈕 */
+        .controller { position: absolute; bottom: 15px; width: 100%; z-index: 100; display: none; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none; }
+        .btn { width: 65px; height: 65px; background: white; border: 2px solid #ddd; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: #5d6d7e; font-size: 20px; pointer-events: auto; box-shadow: 0 4px 0 #ccc; }
+        .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #ccc; background: #eee; }
+        .left-controls { display: flex; gap: 8px; align-items: center; }
+        .jump-btn { width: 85px; height: 85px; border-radius: 50%; font-size: 24px; background: #fffcf0; }
+
+        /* 落地動畫 */
+        @keyframes landSqueeze { 
+            0% { transform: translateX(-50%) scaleX(1.4) scaleY(0.6); } 
+            50% { transform: translateX(-50%) scaleX(0.9) scaleY(1.1); } 
+            100% { transform: translateX(-50%) scaleX(1) scaleY(1); } 
+        }
+        .land-effect { animation: landSqueeze 0.35s ease-out forwards !important; transition: none !important; }
     </style>
 </head>
 <body>
 
     <div id="game-container">
-        <div id="ui-hint" id="hint-text">檢測裝置中...</div>
-        
+        <div id="ui-hint">載入中...</div>
         <div id="player"><div id="eyes"></div></div>
         <div id="ground"></div>
-
         <div class="controller" id="mobile-ctrl">
             <div class="left-controls">
                 <div class="btn" id="btn-left">←</div>
+                <div class="btn" id="btn-down">↓</div>
                 <div class="btn" id="btn-right">→</div>
             </div>
-            <div class="btn" id="btn-jump">跳</div>
+            <div class="btn jump-btn" id="btn-jump">跳</div>
         </div>
     </div>
 
     <script>
         const player = document.getElementById('player');
         const eyes = document.getElementById('eyes');
-        const uiHint = document.getElementById('ui-hint');
         const mobileCtrl = document.getElementById('mobile-ctrl');
+        const uiHint = document.getElementById('ui-hint');
 
         let screenW = window.innerWidth;
         let playerX = screenW / 2;
         const GROUND_Y = 120; 
         let playerY = GROUND_Y; 
-        
         let yVelocity = 0;
         let moveVelocity = 0;
         let isJumping = false;
         let jumpCount = 0;
         let isLanding = false;
+        let isCrouching = false;
+        let facingRight = true; 
 
         const GRAVITY = 0.75;
+        const FAST_FALL_GRAVITY = 2.0; 
         const JUMP_POWER = 16;
+        const SUPER_JUMP_MULT = 1.35;
         const FRICTION = 0.88; 
 
-        // --- [關鍵修正] 區分手機與電腦的速度參數 ---
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        
-        // 電腦版的速度 (原本的剛好感)
-        // 手機版的速度 (數值調小，適配小螢幕)
-        const accel = isTouch ? 0.6 : 1.2; 
-        const maxSpeed = isTouch ? 4.5 : 8; 
-
         if (isTouch) {
             mobileCtrl.style.display = 'flex';
-            uiHint.innerHTML = "手機模式：下方按鈕操作";
+            uiHint.innerHTML = "手機模式：← → 移動 / ↓ 急降與蓄力 / 跳躍鍵";
         } else {
             mobileCtrl.style.display = 'none';
-            uiHint.innerHTML = "電腦模式：A / D 移動，空白鍵跳躍";
+            uiHint.innerHTML = "電腦模式：A / D 移動，S 急降與蓄力，空白鍵跳躍";
         }
 
-        window.addEventListener('resize', () => {
-            screenW = window.innerWidth;
-            playerX = Math.min(playerX, screenW - 25);
-        });
-
-        let moveState = { left: false, right: false };
-        let facingRight = true;
+        const accel = isTouch ? 0.7 : 1.2; 
+        const maxSpeed = isTouch ? 5 : 8; 
 
         function update() {
-            if (moveState.left) { moveVelocity -= accel; facingRight = false; }
+            let currentAccel = isCrouching ? accel * 0.5 : accel;
+            if (moveState.left) { moveVelocity -= currentAccel; facingRight = false; }
             if (moveState.right) { moveVelocity += accel; facingRight = true; }
             
             moveVelocity *= FRICTION;
             if (Math.abs(moveVelocity) > maxSpeed) moveVelocity = maxSpeed * Math.sign(moveVelocity);
-            
             playerX += moveVelocity;
             playerX = Math.max(25, Math.min(window.innerWidth - 25, playerX));
 
             if (isJumping || playerY > GROUND_Y) {
-                yVelocity -= GRAVITY;
+                let currentGravity = isCrouching ? FAST_FALL_GRAVITY : GRAVITY;
+                yVelocity -= currentGravity;
                 playerY += yVelocity;
+
                 if (playerY <= GROUND_Y) {
-                    playerY = GROUND_Y; yVelocity = 0;
-                    if (isJumping) triggerLandEffect();
-                    isJumping = false; jumpCount = 0;
+                    playerY = GROUND_Y;
+                    yVelocity = 0;
+                    if (isJumping && !isCrouching) triggerLandEffect();
+                    isJumping = false;
+                    jumpCount = 0;
                 }
             }
             draw();
@@ -147,32 +142,60 @@
         function draw() {
             player.style.left = playerX + 'px';
             player.style.bottom = playerY + 'px';
+            
+            // 只有在非落地動畫時，才手動控制 CSS Transform
             if (!isLanding) {
-                let sY = 1;
-                if (isJumping) sY = 1 + Math.abs(yVelocity) / 45;
-                player.style.transform = `translateX(-50%) scaleX(${1/sY}) scaleY(${sY})`;
+                let sY = 1, sX = 1;
+                if (isCrouching) {
+                    sY = 0.55; sX = 1.45; // 稍微更扁一點增加張力
+                    eyes.style.top = '24px';
+                } else if (isJumping) {
+                    // 跳躍時的拉伸感減輕，讓動畫更穩
+                    sY = 1 + Math.abs(yVelocity) / 50;
+                    sX = 1 / sY;
+                    eyes.style.top = '10px';
+                } else {
+                    eyes.style.top = '12px';
+                }
+                player.style.transform = `translateX(-50%) scaleX(${sX}) scaleY(${sY})`;
             }
             eyes.style.left = facingRight ? '32px' : '8px';
-            eyes.style.top = (12 + (-yVelocity * 0.6)) + 'px';
         }
 
         function handleJump() {
             if (jumpCount < 2) {
-                if (jumpCount === 1) {
-                    const wave = document.createElement('div');
-                    wave.className = 'jump-wave';
-                    player.appendChild(wave);
-                    setTimeout(() => wave.remove(), 400);
+                let currentJumpPower = JUMP_POWER;
+                let isSuper = false;
+                if (!isJumping && isCrouching) {
+                    currentJumpPower *= SUPER_JUMP_MULT;
+                    isSuper = true;
                 }
-                isJumping = true; yVelocity = JUMP_POWER; jumpCount++;
-                isLanding = false; player.classList.remove('land-effect');
+                const wave = document.createElement('div');
+                wave.className = 'jump-wave' + (isSuper ? ' super-wave' : '');
+                player.appendChild(wave);
+                setTimeout(() => wave.remove(), 400);
+
+                isJumping = true; 
+                yVelocity = currentJumpPower; 
+                jumpCount++;
+                isLanding = false; 
+                isCrouching = false; 
+                player.classList.remove('land-effect');
             }
         }
 
         function triggerLandEffect() {
-            isLanding = true; player.classList.add('land-effect');
-            setTimeout(() => { isLanding = false; player.classList.remove('land-effect'); }, 400);
+            if (isCrouching) return;
+            isLanding = true;
+            player.classList.add('land-effect');
+            // 動畫播完後才允許回到 JS 控制縮放
+            setTimeout(() => {
+                isLanding = false;
+                player.classList.remove('land-effect');
+            }, 350);
         }
+
+        let moveState = { left: false, right: false };
 
         const bindBtn = (id, actionStart, actionEnd) => {
             const btn = document.getElementById(id);
@@ -183,6 +206,7 @@
         if (isTouch) {
             bindBtn('btn-left', () => moveState.left = true, () => moveState.left = false);
             bindBtn('btn-right', () => moveState.right = true, () => moveState.right = false);
+            bindBtn('btn-down', () => isCrouching = true, () => isCrouching = false);
             bindBtn('btn-jump', () => handleJump(), () => {});
         }
 
@@ -190,12 +214,14 @@
             const key = e.key.toLowerCase();
             if (key === 'a') moveState.left = true;
             if (key === 'd') moveState.right = true;
+            if (key === 's') isCrouching = true;
             if (key === ' ' || key === 'w') { e.preventDefault(); handleJump(); }
         });
         window.addEventListener('keyup', (e) => {
             const key = e.key.toLowerCase();
             if (key === 'a') moveState.left = false;
             if (key === 'd') moveState.right = false;
+            if (key === 's') isCrouching = false;
         });
 
         update();
