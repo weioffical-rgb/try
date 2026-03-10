@@ -3,11 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>果凍小人</title>
+    <title>果凍小人 - 完整流暢版</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #fce4ec; font-family: sans-serif; touch-action: none; user-select: none; }
         #game-container { width: 100vw; height: 100vh; position: relative; background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%); }
-        #ground { position: absolute; bottom: 0; width: 100%; height: 50px; background-color: #f8f9fa; z-index: 10; }
+        #ground { position: absolute; bottom: 0; width: 100%; height: 50px; background-color: #f8f9fa; z-index: 10; border-top: 2px solid rgba(0,0,0,0.05); }
+
+        /* [修正] UI 說明文字 */
+        #ui-hint { 
+            position: absolute; top: 20px; width: 100%; text-align: center; 
+            color: #5d6d7e; font-size: 15px; font-weight: bold; z-index: 100;
+            pointer-events: none; text-shadow: 0 0 5px white;
+        }
 
         /* 角色主體 */
         #player {
@@ -22,28 +29,26 @@
         }
         #eyes { position: absolute; top: 12px; width: 10px; height: 10px; background: white; border-radius: 50%; transition: left 0.15s ease; }
 
-        /* 虛擬按鍵樣式 */
+        /* [優化] 虛擬按鈕：更透明、不擋視線 */
         .controller {
-            position: absolute; bottom: 40px; width: 100%; height: 120px;
-            z-index: 100; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box;
-            pointer-events: none; /* 容器穿透 */
+            position: absolute; bottom: 25px; width: 100%; 
+            z-index: 100; display: flex; justify-content: space-between; padding: 0 15px; box-sizing: border-box;
+            pointer-events: none;
         }
         .btn {
-            width: 80px; height: 80px; background: rgba(255, 255, 255, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 50%;
+            width: 70px; height: 70px; 
+            background: rgba(255, 255, 255, 0.2); /* 降低亮度 */
+            backdrop-filter: blur(3px); /* 磨砂感 */
+            border: 1.5px solid rgba(255, 255, 255, 0.4); border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 24px; font-weight: bold;
-            pointer-events: auto; /* 按鈕接收觸摸 */
-            backdrop-filter: blur(5px);
+            color: rgba(93, 109, 126, 0.6); font-size: 20px;
+            pointer-events: auto; transition: all 0.1s;
         }
-        .btn:active { background: rgba(255, 255, 255, 0.6); transform: scale(0.9); }
-        .left-controls { display: flex; gap: 15px; }
-        
-        /* 隱藏 PC 端按鈕 (選配) */
-        @media (min-width: 1024px) { .controller { opacity: 0.3; } }
+        .btn:active { background: rgba(255, 255, 255, 0.5); transform: scale(0.9); color: #ff9a9e; }
+        .left-controls { display: flex; gap: 10px; }
 
-        /* 特效與動畫維持原樣... */
-        .jump-wave { position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px; border: 3px solid rgba(255,255,255,0.8); border-radius: 50%; pointer-events: none; animation: jumpWave 0.4s ease-out forwards; }
+        /* 特效 */
+        .jump-wave { position: absolute; left: 50%; bottom: -5px; width: 40px; height: 15px; border: 3px solid rgba(255,255,255,0.6); border-radius: 50%; pointer-events: none; animation: jumpWave 0.4s ease-out forwards; }
         @keyframes jumpWave { 0% { transform: translateX(-50%) scale(0.2); opacity: 0.8; } 100% { transform: translateX(-50%) scale(2.5); opacity: 0; } }
         @keyframes landSqueeze { 0% { transform: translateX(-50%) scaleX(1.6) scaleY(0.4); } 40% { transform: translateX(-50%) scaleX(0.8) scaleY(1.2); } 100% { transform: translateX(-50%) scaleX(1) scaleY(1); } }
         .land-effect { animation: landSqueeze 0.4s ease-out forwards !important; }
@@ -52,6 +57,8 @@
 <body>
 
     <div id="game-container">
+        <div id="ui-hint">電腦：AD/空白鍵 | 手機：虛擬按鈕<br>二段跳時會有空氣波紋喔！</div>
+        
         <div id="player"><div id="eyes"></div></div>
         <div id="ground"></div>
 
@@ -82,6 +89,9 @@
         const FRICTION = 0.88; 
         const accel = 1.2;
         const maxSpeed = 7;
+
+        let moveState = { left: false, right: false };
+        let facingRight = true;
 
         function update() {
             if (moveState.left) { moveVelocity -= accel; facingRight = false; }
@@ -136,15 +146,12 @@
             setTimeout(() => { isLanding = false; player.classList.remove('land-effect'); }, 400);
         }
 
-        // --- 改進版控制邏輯 ---
-        let moveState = { left: false, right: false };
-        let facingRight = true;
-
+        // --- 虛擬按鍵事件 ---
         const bindBtn = (id, actionStart, actionEnd) => {
             const btn = document.getElementById(id);
             btn.addEventListener('touchstart', (e) => { e.preventDefault(); actionStart(); });
             btn.addEventListener('touchend', (e) => { e.preventDefault(); actionEnd(); });
-            // 同時支援滑鼠點擊以便測試
+            // PC 測試支援
             btn.addEventListener('mousedown', (e) => { if(e.button===0) actionStart(); });
             btn.addEventListener('mouseup', (e) => actionEnd());
         };
@@ -153,15 +160,17 @@
         bindBtn('btn-right', () => moveState.right = true, () => moveState.right = false);
         bindBtn('btn-jump', () => handleJump(), () => {});
 
-        // 電腦鍵盤維持
+        // --- 鍵盤監聽 ---
         window.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'a') moveState.left = true;
-            if (e.key.toLowerCase() === 'd') moveState.right = true;
-            if (e.key === ' ' || e.key.toLowerCase() === 'w') { e.preventDefault(); handleJump(); }
+            const key = e.key.toLowerCase();
+            if (key === 'a') moveState.left = true;
+            if (key === 'd') moveState.right = true;
+            if (key === ' ' || key === 'w' || key === 'arrowup') { e.preventDefault(); handleJump(); }
         });
         window.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() === 'a') moveState.left = false;
-            if (e.key.toLowerCase() === 'd') moveState.right = false;
+            const key = e.key.toLowerCase();
+            if (key === 'a') moveState.left = false;
+            if (key === 'd') moveState.right = false;
         });
 
         update();
